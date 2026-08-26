@@ -69,6 +69,16 @@ function App() {
       }
     });
 
+    socket.on('gameWon', (data) => {
+      if (data.game) {
+        setGameState(data.game);
+      }
+      if (data.players) {
+        const currentPlayerData = data.players.find(p => p.socketId === socket.id);
+        if (currentPlayerData) setPlayer(currentPlayerData);
+      }
+    });
+
     socket.on('playerLeft', (data) => {
       console.log('Player left:', data);
       setGameState(data.game);
@@ -85,6 +95,7 @@ function App() {
       socket.off('gameStarted');
       socket.off('cardPlayed');
       socket.off('cardDrawn');
+      socket.off('gameWon');
       socket.off('playerLeft');
       socket.off('error');
     };
@@ -121,9 +132,12 @@ function App() {
         },
       });
       const data = await response.json();
+      if (!response.ok || !data.gameId) {
+        throw new Error(data.error || 'Failed to create game');
+      }
       joinGame(data.gameId, playerName);
     } catch (error) {
-      setError('Failed to create game. Please try again.');
+      setError(error.message || 'Failed to create game. Please try again.');
     }
   };
 

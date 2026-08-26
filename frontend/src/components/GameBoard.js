@@ -6,14 +6,6 @@ import DiscardPile from './DiscardPile';
 function GameBoard({ gameState, player, onPlayCard, onDrawCard, onStartGame, onLeaveGame, lastPlayerName }) {
   const [unoCalled, setUnoCalled] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState(null);
-  const [chosenColor, setChosenColor] = useState(null);
-
-  if (!gameState || !player) {
-    return <div>Loading...</div>;
-  }
-
-  const isCurrentPlayer = gameState.currentPlayer && gameState.currentPlayer._id === player._id;
-  const canStartGame = gameState.status === 'waiting' && gameState.players.length >= 2;
 
   // Reset UNO call when hand size changes
   useEffect(() => {
@@ -22,7 +14,15 @@ function GameBoard({ gameState, player, onPlayCard, onDrawCard, onStartGame, onL
         setUnoCalled(false);
       }
     }
-  }, [player?.hand?.length]);
+  }, [player]);
+
+  if (!gameState || !player) {
+    return <div>Loading...</div>;
+  }
+
+  const currentPlayerId = gameState.currentPlayer?._id || gameState.currentPlayer;
+  const isCurrentPlayer = currentPlayerId && currentPlayerId.toString() === player._id.toString();
+  const canStartGame = gameState.status === 'waiting' && gameState.players.length >= 2;
 
   const handleCardClick = (cardId, card) => {
     if (!isCurrentPlayer) return;
@@ -41,7 +41,6 @@ function GameBoard({ gameState, player, onPlayCard, onDrawCard, onStartGame, onL
     if (selectedCardId) {
       onPlayCard(selectedCardId, color);
       setSelectedCardId(null);
-      setChosenColor(null);
     }
   };
 
@@ -77,7 +76,7 @@ function GameBoard({ gameState, player, onPlayCard, onDrawCard, onStartGame, onL
 
       {gameState.status === 'playing' && (
         <>
-          <OtherPlayers players={gameState.players} currentPlayerIndex={gameState.players.findIndex(p => p._id === gameState.currentPlayer?._id)} />
+          <OtherPlayers players={gameState.players} currentPlayerIndex={gameState.players.findIndex(p => p._id.toString() === currentPlayerId?.toString())} />
           <DiscardPile discardPile={gameState.discardPile} lastPlayerName={lastPlayerName} />
           <div className="game-actions">
             {isCurrentPlayer && (
@@ -110,6 +109,7 @@ function GameBoard({ gameState, player, onPlayCard, onDrawCard, onStartGame, onL
             isCurrentPlayer={isCurrentPlayer}
             onPlayCard={handleCardClick}
             topCard={gameState.discardPile && gameState.discardPile.length > 0 ? gameState.discardPile[gameState.discardPile.length - 1] : null}
+            currentColor={gameState.currentColor}
           />
         </>
       )}

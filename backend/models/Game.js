@@ -33,8 +33,7 @@ const gameSchema = new mongoose.Schema({
   },
   currentColor: {
     type: String,
-    enum: ['red', 'blue', 'yellow', 'green'],
-    default: null
+    enum: ['red', 'blue', 'yellow', 'green']
   },
   roomCode: {
     type: String,

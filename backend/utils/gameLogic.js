@@ -68,7 +68,12 @@ async function dealCards(gameId, playerIds) {
     }
   }
 
-  // Set first card on discard pile
+  // Start with a colored card so the first active color is always defined.
+  while (game.deck.length > 0) {
+    const firstCard = await Card.findById(game.deck[game.deck.length - 1]);
+    if (firstCard && firstCard.color !== 'wild') break;
+    game.deck.unshift(game.deck.pop());
+  }
   if (game.deck.length > 0) {
     const firstCard = game.deck.pop();
     game.discardPile.push(firstCard);
@@ -89,7 +94,7 @@ async function canPlayCard(card, game) {
   // Get the top card from discard pile
   if (game.discardPile.length > 0) {
     const topCard = await Card.findById(game.discardPile[game.discardPile.length - 1]);
-    if (card.value === topCard.value || card.color === topCard.color) return true;
+    if (card.value === topCard.value) return true;
   }
 
   return false;

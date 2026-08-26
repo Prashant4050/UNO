@@ -8,12 +8,13 @@ import {
   applySpecialCard,
   checkWinCondition,
   initializeGame,
-  shuffle
+  shuffle,
+  chooseColor
 } from '../utils/gameLogic';
 
 function SinglePlayerGame({ playerName, onLeaveGame }) {
   const [gameState, setGameState] = useState(() => initializeGame(playerName));
-  const [chosenColor, setChosenColor] = useState(null);
+  const [pendingWildCardId, setPendingWildCardId] = useState(null);
   const [message, setMessage] = useState('');
   const [unoCalled, setUnoCalled] = useState([false, false]);
 
@@ -36,10 +37,14 @@ function SinglePlayerGame({ playerName, onLeaveGame }) {
 
     const card = currentHand[cardIndex];
 
-    if (!canPlayCard(card, topCard) && card.color !== 'wild') {
+    if (!canPlayCard(card, topCard, gameState.currentColor)) {
       setMessage('Cannot play that card!');
       return;
     }
+
+    const effectiveColor = card.color === 'wild'
+      ? (selectedColor || chooseColor(currentHand.filter(currentCard => currentCard.id !== cardId)))
+      : card.color;
 
     // Check UNO before playing
     const newHandSize = currentHand.length - 1;
@@ -77,7 +82,7 @@ function SinglePlayerGame({ playerName, onLeaveGame }) {
       ...gameState,
       hands: newHands,
       discardPile: newDiscardPile,
-      currentColor: card.color === 'wild' ? (selectedColor || 'red') : card.color
+      currentColor: effectiveColor
     };
 
     // Reset UNO called for next player
@@ -99,30 +104,31 @@ function SinglePlayerGame({ playerName, onLeaveGame }) {
     }
 
     setGameState(newState);
-    setChosenColor(null);
+    setPendingWildCardId(null);
     setMessage('');
   }, [gameState, humanHand, computerHand, topCard, isHumanTurn, unoCalled]);
 
   const drawCard = useCallback(() => {
-    if (gameState.drawPile.length === 0) {
-      // Reshuffle discard pile (except top card)
-      const newDrawPile = shuffle([...gameState.discardPile.slice(0, -1)]);
-      setGameState(prev => ({
-        ...prev,
-        drawPile: newDrawPile,
-        discardPile: [prev.discardPile[prev.discardPile.length - 1]]
-      }));
+    let drawPile = [...gameState.drawPile];
+    let discardPile = gameState.discardPile;
+    if (drawPile.length === 0) {
+      drawPile = shuffle([...discardPile.slice(0, -1)]);
+      discardPile = [discardPile[discardPile.length - 1]];
+    }
+    if (drawPile.length === 0) {
+      setMessage('No cards left to draw.');
       return;
     }
 
-    const drawnCard = gameState.drawPile[0];
+    const drawnCard = drawPile[0];
     const newHands = [...gameState.hands];
     newHands[gameState.currentPlayer].push(drawnCard);
 
     const newState = {
       ...gameState,
       hands: newHands,
-      drawPile: gameState.drawPile.slice(1),
+      drawPile: drawPile.slice(1),
+      discardPile,
       currentPlayer: (gameState.currentPlayer + gameState.direction + gameState.players.length) % gameState.players.length
     };
 
@@ -132,34 +138,43 @@ function SinglePlayerGame({ playerName, onLeaveGame }) {
 
   const computerTurn = useCallback(() => {
     // Auto-call UNO if computer has 1 card
-    if (computerHand.length === 1 && !unoCalled[1]) {
+    if (computerHand.length === 2 && !unoCalled[1]) {
       setUnoCalled(prev => [prev[0], true]);
     }
 
-    const aiCard = aiPlayCard(computerHand, topCard);
+    const aiCard = aiPlayCard(computerHand, topCard, gameState.currentColor);
     if (aiCard) {
-      playCard(aiCard.id, null);
+      playCard(aiCard.id, aiCard.color === 'wild' ? chooseColor(computerHand) : null);
     } else {
       drawCard();
     }
-  }, [computerHand, topCard, playCard, drawCard, unoCalled]);
+  }, [computerHand, topCard, gameState.currentColor, playCard, drawCard, unoCalled]);
 
   useEffect(() => {
     if (!isHumanTurn && gameState.status === 'playing') {
       // Computer's turn
-      setTimeout(() => {
+      const turnTimer = setTimeout(() => {
         computerTurn();
       }, 1000); // Delay for better UX
+
+      return () => clearTimeout(turnTimer);
     }
   }, [gameState.currentPlayer, gameState.status, isHumanTurn, computerTurn]);
 
-  const handlePlayCard = (cardId) => {
+  const handlePlayCard = (cardId, card) => {
     if (!isHumanTurn) return;
-    playCard(cardId, chosenColor);
+    if (card.color === 'wild') {
+      setPendingWildCardId(cardId);
+      setMessage('Choose a color for your wild card.');
+      return;
+    }
+    playCard(cardId);
   };
 
   const handleColorChoice = (color) => {
-    setChosenColor(color);
+    if (pendingWildCardId) {
+      playCard(pendingWildCardId, color);
+    }
   };
 
   if (gameState.status === 'finished') {
@@ -193,7 +208,7 @@ function SinglePlayerGame({ playerName, onLeaveGame }) {
         currentPlayerIndex={gameState.currentPlayer}
       />
 
-      <DiscardPile topCard={topCard} />
+      <DiscardPile discardPile={gameState.discardPile} />
 
       <div className="game-controls">
         {isHumanTurn && (
@@ -202,9 +217,9 @@ function SinglePlayerGame({ playerName, onLeaveGame }) {
             {humanHand.length === 2 && !unoCalled[0] && (
               <button onClick={callUno} className="uno-button">Call UNO!</button>
             )}
-            {chosenColor && (
+            {pendingWildCardId && (
               <div className="color-selection">
-                <p>Choose color:</p>
+                <p>Choose a color:</p>
                 {['red', 'blue', 'green', 'yellow'].map(color => (
                   <button
                     key={color}
@@ -225,6 +240,7 @@ function SinglePlayerGame({ playerName, onLeaveGame }) {
         isCurrentPlayer={isHumanTurn}
         onPlayCard={handlePlayCard}
         topCard={topCard}
+        currentColor={gameState.currentColor}
       />
 
       <button onClick={onLeaveGame} className="leave-button">Leave Game</button>

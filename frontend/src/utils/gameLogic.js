@@ -33,9 +33,10 @@ export function shuffle(array) {
   return array;
 }
 
-export function canPlayCard(card, topCard) {
+export function canPlayCard(card, topCard, currentColor = topCard?.color) {
+  if (!card || !topCard) return false;
   if (card.color === 'wild') return true;
-  if (card.color === topCard.color || card.value === topCard.value) return true;
+  if (card.color === currentColor || card.value === topCard.value) return true;
   return false;
 }
 
@@ -47,17 +48,25 @@ export function dealCards(deck, numPlayers, cardsPerPlayer = 7) {
   return hands;
 }
 
-export function getPlayableCards(hand, topCard) {
-  return hand.filter(card => canPlayCard(card, topCard));
+export function getPlayableCards(hand, topCard, currentColor) {
+  return hand.filter(card => canPlayCard(card, topCard, currentColor));
 }
 
-export function aiPlayCard(hand, topCard) {
-  const playable = getPlayableCards(hand, topCard);
+export function aiPlayCard(hand, topCard, currentColor) {
+  const playable = getPlayableCards(hand, topCard, currentColor);
   if (playable.length > 0) {
     // Simple AI: play first playable card
     return playable[0];
   }
   return null; // Draw card
+}
+
+export function chooseColor(hand) {
+  return COLORS.reduce((bestColor, color) => {
+    const count = hand.filter(card => card.color === color).length;
+    const bestCount = hand.filter(card => card.color === bestColor).length;
+    return count > bestCount ? color : bestColor;
+  }, COLORS[0]);
 }
 
 export function applySpecialCard(card, gameState) {

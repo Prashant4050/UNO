@@ -212,6 +212,17 @@ io.on('connection', (socket) => {
         return;
       }
 
+      if (game.status !== 'playing') {
+        socket.emit('error', { message: 'Game is not in progress' });
+        return;
+      }
+
+      const validColors = ['red', 'blue', 'yellow', 'green'];
+      if (card.color === 'wild' && !validColors.includes(chosenColor)) {
+        socket.emit('error', { message: 'Choose a color for a wild card' });
+        return;
+      }
+
       // Check if card is in player's hand
       if (!player.hand.some(c => c._id.toString() === cardId)) {
         socket.emit('error', { message: 'Card not in your hand' });
@@ -245,7 +256,12 @@ io.on('connection', (socket) => {
 
       // Check win condition
       const hasWon = await checkWinCondition(player._id, gameId, io);
-      if (!hasWon) {
+      if (hasWon) {
+        const finishedGame = await Game.findById(game._id)
+          .populate('players').populate('discardPile').populate('currentPlayer').populate('winner');
+        const finishedPlayers = await Player.find({ game: game._id }).populate('hand');
+        io.to(game.roomCode).emit('gameWon', { game: finishedGame, players: finishedPlayers });
+      } else {
         // Get updated game state
         const updatedGame = await Game.findById(game._id).populate('players').populate('discardPile').populate('currentPlayer');
         const players = await Player.find({ game: game._id }).populate('hand');

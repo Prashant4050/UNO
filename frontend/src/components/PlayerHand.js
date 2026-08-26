@@ -1,7 +1,7 @@
 import React from 'react';
 import Card from './Card';
 
-function PlayerHand({ player, cards, isCurrentPlayer, onPlayCard, topCard }) {
+function PlayerHand({ player, cards, isCurrentPlayer, onPlayCard, topCard, currentColor }) {
   const hand = player ? player.hand : cards;
   if (!hand) return null;
 
@@ -14,7 +14,7 @@ function PlayerHand({ player, cards, isCurrentPlayer, onPlayCard, topCard }) {
   const isCardPlayable = (card) => {
     if (!topCard) return true;
     if (card.color === 'wild') return true;
-    return card.color === topCard.color || card.value === topCard.value;
+    return card.color === (currentColor || topCard.color) || card.value === topCard.value;
   };
 
   return (
