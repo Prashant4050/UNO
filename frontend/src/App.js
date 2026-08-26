@@ -13,12 +13,18 @@ function App() {
   const [currentView, setCurrentView] = useState('lobby'); // 'lobby' or 'game' or 'single-player'
   const [error, setError] = useState(null);
   const [lastPlayerName, setLastPlayerName] = useState(null);
+  const [multiplayerMode, setMultiplayerMode] = useState(false);
+
+  const updateGameState = (game, players = null) => {
+    if (!game) return;
+    setGameState(players ? { ...game, players } : game);
+  };
 
   useEffect(() => {
     // Socket event listeners
     socket.on('joinedGame', (data) => {
       console.log('Joined game:', data);
-      setGameState(data.game);
+      updateGameState(data.game, data.players);
       setPlayer(data.player);
       setCurrentView('game');
       setError(null);
@@ -26,12 +32,12 @@ function App() {
 
     socket.on('playerJoined', (data) => {
       console.log('Player joined:', data);
-      setGameState(data.game);
+      updateGameState(data.game, data.players);
     });
 
     socket.on('gameStarted', (data) => {
       console.log('Game started:', data);
-      setGameState(data.game);
+      updateGameState(data.game, data.players);
       // Update player state with hand
       if (data.players) {
         const currentPlayerData = data.players.find(p => p.socketId === socket.id);
@@ -43,7 +49,7 @@ function App() {
 
     socket.on('cardPlayed', (data) => {
       console.log('Card played:', data);
-      setGameState(data.game);
+      updateGameState(data.game, data.players);
       // Update player state if this client is the one who played
       if (data.players) {
         const currentPlayerData = data.players.find(p => p.socketId === socket.id);
@@ -59,7 +65,7 @@ function App() {
 
     socket.on('cardDrawn', (data) => {
       console.log('Card drawn:', data);
-      setGameState(data.game);
+      updateGameState(data.game, data.players);
       // Update player state if this client is the one who drew
       if (data.players) {
         const currentPlayerData = data.players.find(p => p.socketId === socket.id);
@@ -71,7 +77,7 @@ function App() {
 
     socket.on('gameWon', (data) => {
       if (data.game) {
-        setGameState(data.game);
+        updateGameState(data.game, data.players);
       }
       if (data.players) {
         const currentPlayerData = data.players.find(p => p.socketId === socket.id);
@@ -81,7 +87,7 @@ function App() {
 
     socket.on('playerLeft', (data) => {
       console.log('Player left:', data);
-      setGameState(data.game);
+      updateGameState(data.game, data.players);
     });
 
     socket.on('error', (data) => {
@@ -147,9 +153,19 @@ function App() {
     setLastPlayerName(null); // Reset for new game
   };
 
-  const startMultiplayer = (playerName) => {
-    setLastPlayerName(null); // Reset for new game
+  const startMultiplayer = () => {
+    setLastPlayerName(null);
+    setMultiplayerMode(true);
+  };
+
+  const createMultiplayerRoom = (playerName) => {
+    setLastPlayerName(null);
     createGame(playerName);
+  };
+
+  const joinMultiplayerRoom = (roomCode, playerName) => {
+    setLastPlayerName(null);
+    joinGame(roomCode, playerName);
   };
 
   const leaveGame = () => {
@@ -159,6 +175,7 @@ function App() {
     setGameState(null);
     setPlayer(null);
     setCurrentView('lobby');
+    setMultiplayerMode(false);
     setLastPlayerName(null); // Reset last player name
   };
 
@@ -167,7 +184,14 @@ function App() {
       <h1>UNO Game</h1>
       {error && <div className="error">{error}</div>}
       {currentView === 'lobby' ? (
-        <Lobby onSinglePlayer={startSinglePlayer} onMultiplayer={startMultiplayer} />
+        <Lobby
+          onSinglePlayer={startSinglePlayer}
+          onMultiplayer={startMultiplayer}
+          multiplayerMode={multiplayerMode}
+          onBack={() => setMultiplayerMode(false)}
+          onCreateRoom={createMultiplayerRoom}
+          onJoinRoom={joinMultiplayerRoom}
+        />
       ) : currentView === 'single-player' ? (
         <SinglePlayerGame playerName={player.name} onLeaveGame={leaveGame} />
       ) : (

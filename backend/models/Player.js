@@ -7,7 +7,8 @@ const playerSchema = new mongoose.Schema({
   },
   socketId: {
     type: String,
-    required: true
+    required: true,
+    unique: true
   },
   hand: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -16,6 +17,10 @@ const playerSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  isBot: {
+    type: Boolean,
+    default: false
   },
   game: {
     type: mongoose.Schema.Types.ObjectId,

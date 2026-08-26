@@ -34,6 +34,63 @@ app.get('/', (req, res) => {
   res.send('UNO Game Backend');
 });
 
+const getGamePlayers = (gameId) => Player.find({ game: gameId }).populate('hand');
+
+async function runBotTurns(gameId) {
+  for (let turn = 0; turn < 20; turn++) {
+    const game = await Game.findById(gameId).populate('players').populate('discardPile');
+    if (!game || game.status !== 'playing' || !game.currentPlayer) return;
+
+    const bot = game.players.find(player =>
+      player._id.toString() === game.currentPlayer.toString() && player.isBot
+    );
+    if (!bot) return;
+
+    const botWithHand = await Player.findById(bot._id).populate('hand');
+    const topCard = game.discardPile[game.discardPile.length - 1];
+    const playableCard = botWithHand.hand.find(card =>
+      card.color === 'wild' || card.color === game.currentColor || card.value === topCard.value
+    );
+
+    if (playableCard) {
+      botWithHand.hand = botWithHand.hand.filter(card => card._id.toString() !== playableCard._id.toString());
+      await botWithHand.save();
+      game.discardPile.push(playableCard._id);
+      game.currentColor = playableCard.color === 'wild'
+        ? ['red', 'blue', 'yellow', 'green'].sort((a, b) =>
+          botWithHand.hand.filter(card => card.color === b).length - botWithHand.hand.filter(card => card.color === a).length
+        )[0]
+        : playableCard.color;
+      await game.save();
+      await handleSpecialCard(playableCard, game, io);
+
+      if (await checkWinCondition(botWithHand._id, gameId, io)) {
+        const finishedGame = await Game.findById(gameId).populate('players').populate('discardPile').populate('currentPlayer').populate('winner');
+        io.to(game.roomCode).emit('gameWon', { game: finishedGame, players: await getGamePlayers(gameId) });
+        return;
+      }
+
+      const updatedGame = await Game.findById(gameId).populate('players').populate('discardPile').populate('currentPlayer');
+      io.to(game.roomCode).emit('cardPlayed', {
+        game: updatedGame,
+        players: await getGamePlayers(gameId),
+        playedCard: playableCard,
+        playerName: botWithHand.name
+      });
+    } else {
+      await drawCardForPlayer(game, botWithHand);
+      await botWithHand.save();
+      const currentIndex = game.players.findIndex(player => player._id.toString() === game.currentPlayer.toString());
+      game.currentPlayer = game.players[getNextPlayerIndex(game, currentIndex)]._id;
+      await game.save();
+      const updatedGame = await Game.findById(gameId).populate('players').populate('discardPile').populate('currentPlayer');
+      io.to(game.roomCode).emit('cardDrawn', { game: updatedGame, players: await getGamePlayers(gameId) });
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+}
+
 // Create new game
 app.post('/api/games', async (req, res) => {
   try {
@@ -151,17 +208,30 @@ io.on('connection', (socket) => {
         return;
       }
 
-      if (game.players.length < 2) {
-        socket.emit('error', { message: 'Need at least 2 players to start' });
+      if (game.players.length < 1) {
+        socket.emit('error', { message: 'Join the room before starting' });
         return;
       }
+
+      while (game.players.length < 4) {
+        const botNumber = game.players.length;
+        const bot = await Player.create({
+          name: `Computer ${botNumber}`,
+          socketId: `bot-${game._id}-${botNumber}`,
+          game: game._id,
+          isBot: true
+        });
+        game.players.push(bot._id);
+      }
+      await game.save();
+      const playersForGame = await Player.find({ game: gameId });
 
       // Shuffle deck
       shuffle(game.deck);
       await game.save();
 
       // Deal cards
-      await dealCards(gameId, game.players.map(p => p._id));
+      await dealCards(gameId, playersForGame.map(p => p._id));
 
       // Set current player
       const updatedGame = await Game.findById(gameId).populate('players').populate('discardPile');
@@ -176,6 +246,7 @@ io.on('connection', (socket) => {
         game: updatedGame,
         players: players
       });
+      runBotTurns(gameId);
 
     } catch (error) {
       socket.emit('error', { message: error.message });
@@ -273,6 +344,7 @@ io.on('connection', (socket) => {
           playedCard: card,
           playerName: player.name
         });
+        runBotTurns(game._id);
       }
 
     } catch (error) {
@@ -323,6 +395,7 @@ io.on('connection', (socket) => {
         game: updatedGame,
         players: updatedPlayers,
       });
+      runBotTurns(game._id);
 
     } catch (error) {
       socket.emit('error', { message: error.message });
@@ -401,7 +474,7 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

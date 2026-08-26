@@ -22,7 +22,7 @@ function GameBoard({ gameState, player, onPlayCard, onDrawCard, onStartGame, onL
 
   const currentPlayerId = gameState.currentPlayer?._id || gameState.currentPlayer;
   const isCurrentPlayer = currentPlayerId && currentPlayerId.toString() === player._id.toString();
-  const canStartGame = gameState.status === 'waiting' && gameState.players.length >= 2;
+  const canStartGame = gameState.status === 'waiting' && gameState.players.length >= 1;
 
   const handleCardClick = (cardId, card) => {
     if (!isCurrentPlayer) return;
@@ -60,7 +60,7 @@ function GameBoard({ gameState, player, onPlayCard, onDrawCard, onStartGame, onL
 
       {gameState.status === 'waiting' && (
         <div className="waiting-room">
-          <h3>Waiting for players...</h3>
+          <h3>Ready for 4 players</h3>
           <div className="players-list">
             {gameState.players.map((p, index) => (
               <div key={index} className="player-item">
@@ -76,7 +76,13 @@ function GameBoard({ gameState, player, onPlayCard, onDrawCard, onStartGame, onL
 
       {gameState.status === 'playing' && (
         <>
-          <OtherPlayers players={gameState.players} currentPlayerIndex={gameState.players.findIndex(p => p._id.toString() === currentPlayerId?.toString())} />
+          <OtherPlayers
+            players={gameState.players.map(gamePlayer => ({
+              ...gamePlayer,
+              cardCount: gamePlayer.hand ? gamePlayer.hand.length : 0
+            }))}
+            currentPlayerIndex={gameState.players.findIndex(p => p._id.toString() === currentPlayerId?.toString())}
+          />
           <DiscardPile discardPile={gameState.discardPile} lastPlayerName={lastPlayerName} />
           <div className="game-actions">
             {isCurrentPlayer && (
